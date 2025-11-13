@@ -1,0 +1,96 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\geometry{a4paper, margin=2.5cm}
+\title{Proyecto 3: Hamilton, Euler y Grafos, Parte I}
+\author{Miembros del Grupo:\\Ricardo Castro\\Juan Carlos Valverde\\~\\Curso: Analisis de Algoritmos\\~\\Semestres: II 2025}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\thispagestyle{empty}
+
+\newpage
+
+\section{William Rowan Hamilton}
+
+William Rowan Hamilton (1805-1865) fue un matemático, físico y astrónomo irlandés. Hizo importantes contribuciones al desarrollo del álgebra, la óptica y la mecánica. Es especialmente conocido por su trabajo en el álgebra de cuaterniones y por el problema del ciclo hamiltoniano, que lleva su nombre. El problema consiste en encontrar un ciclo en un grafo que visite cada vértice exactamente una vez.
+
+\section{Ciclos y Rutas Hamiltonianas}
+
+Un \textbf{ciclo hamiltoniano} es un ciclo en un grafo que visita cada vértice exactamente una vez y regresa al vértice inicial. Una \textbf{ruta hamiltoniana} es un camino simple que visita cada vértice exactamente una vez, pero no necesariamente regresa al punto de partida.
+
+El problema de determinar si un grafo tiene un ciclo o ruta hamiltoniana es un problema NP-completo. En este proyecto, se utiliza un algoritmo de backtracking para determinar si existe al menos un ciclo o ruta hamiltoniana, aunque no se encuentra la solución específica.
+
+\section{Leonhard Euler}
+
+Leonhard Euler (1707-1783) fue un matemático y físico suizo considerado uno de los matemáticos más prolíficos de la historia. Realizó importantes descubrimientos en cálculo, teoría de grafos, teoría de números y muchas otras áreas. El problema de los puentes de Königsberg, que resolvió, es considerado el origen de la teoría de grafos.
+
+\section{Ciclos y Rutas Eulerianas}
+
+Un \textbf{ciclo euleriano} es un ciclo que recorre cada arista del grafo exactamente una vez y regresa al vértice inicial. Un \textbf{camino euleriano} (o ruta euleriana) es un camino que recorre cada arista exactamente una vez, pero no necesariamente regresa al punto de partida.
+
+Un grafo es \textbf{euleriano} si tiene un ciclo euleriano. Un grafo es \textbf{semieuleriano} si tiene un camino euleriano pero no un ciclo euleriano.
+
+Para grafos no dirigidos: un grafo es euleriano si y solo si es conexo y todos los vértices tienen grado par. Es semieuleriano si es conexo y tiene exactamente dos vértices de grado impar.
+
+Para grafos dirigidos: un grafo es euleriano si y solo si es fuertemente conexo y cada vértice tiene el mismo grado de entrada que de salida. Es semieuleriano si es conexo y tiene exactamente un vértice con grado de salida mayor que el de entrada en una unidad, y exactamente un vértice con grado de entrada mayor que el de salida en una unidad, y todos los demás tienen grados iguales.
+
+\section{Grafo Original}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.00]
+\draw[->, thick] (1.00,0.00) -- (0.00,2.00);
+\draw[->, thick] (1.00,0.00) -- (6.00,0.00);
+\draw[->, thick] (8.00,0.00) -- (5.00,0.00);
+\draw[->, thick] (3.00,0.00) -- (0.00,12.00);
+\draw[->, thick] (0.00,7.00) -- (10.00,0.00);
+\draw[->, thick] (9.00,0.00) -- (8.00,0.00);
+\draw[->, thick] (0.00,11.00) -- (5.00,0.00);
+\draw[->, thick] (6.00,0.00) -- (0.00,4.00);
+\draw[->, thick] (6.00,0.00) -- (0.00,12.00);
+\node[circle, draw=black, fill=blue!30, minimum size=0.8cm, font=\scriptsize] (n0) at (1.00,0.00) {0};
+\node[circle, draw=black, fill=yellow!30, minimum size=0.8cm, font=\scriptsize] (n1) at (0.00,2.00) {1};
+\node[circle, draw=black, fill=red!30, minimum size=0.8cm, font=\scriptsize] (n2) at (8.00,0.00) {2};
+\node[circle, draw=black, fill=yellow!30, minimum size=0.8cm, font=\scriptsize] (n3) at (0.00,4.00) {3};
+\node[circle, draw=black, fill=green!30, minimum size=0.8cm, font=\scriptsize] (n4) at (3.00,0.00) {4};
+\node[circle, draw=black, fill=blue!30, minimum size=0.8cm, font=\scriptsize] (n5) at (5.00,0.00) {5};
+\node[circle, draw=black, fill=green!30, minimum size=0.8cm, font=\scriptsize] (n6) at (0.00,7.00) {6};
+\node[circle, draw=black, fill=green!30, minimum size=0.8cm, font=\scriptsize] (n7) at (9.00,0.00) {7};
+\node[circle, draw=black, fill=blue!30, minimum size=0.8cm, font=\scriptsize] (n8) at (0.00,12.00) {8};
+\node[circle, draw=black, fill=green!30, minimum size=0.8cm, font=\scriptsize] (n9) at (0.00,11.00) {9};
+\node[circle, draw=black, fill=yellow!30, minimum size=0.8cm, font=\scriptsize] (n10) at (10.00,0.00) {10};
+\node[circle, draw=black, fill=yellow!30, minimum size=0.8cm, font=\scriptsize] (n11) at (6.00,0.00) {11};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Leyenda de Colores}
+
+\begin{itemize}
+\item \fcolorbox{black}{blue!30}{\rule{0.5cm}{0.5cm}} Grado de entrada par, grado de salida par
+\item \fcolorbox{black}{green!30}{\rule{0.5cm}{0.5cm}} Grado de entrada par, grado de salida impar
+\item \fcolorbox{black}{yellow!30}{\rule{0.5cm}{0.5cm}} Grado de entrada impar, grado de salida par
+\item \fcolorbox{black}{red!30}{\rule{0.5cm}{0.5cm}} Grado de entrada impar, grado de salida impar
+\end{itemize}
+
+\section{Propiedades del Grafo}
+
+\subsection{Ciclos y Rutas Hamiltonianas}
+
+El grafo \textbf{no contiene un ciclo hamiltoniano}. No existe un ciclo que visite cada vértice exactamente una vez.
+
+El grafo \textbf{no contiene una ruta hamiltoniana}. No existe un camino que visite cada vértice exactamente una vez.
+
+\subsection{Propiedades Eulerianas}
+
+El grafo \textbf{no es euleriano ni semieuleriano}. No existe un ciclo ni un camino que recorra cada arista exactamente una vez.
+
+\end{document}
