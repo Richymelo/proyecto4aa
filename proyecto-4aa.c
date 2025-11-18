@@ -100,6 +100,19 @@ void on_apply_nodes_clicked(GtkButton *button, gpointer user_data) {
     grafo_actual.K = K;
     num_nodos_actual = K;
     
+    // Inicializar la matriz a 0 cuando se cambia el número de nodos
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            grafo_actual.matriz_adyacencia[i][j] = 0;
+        }
+    }
+    
+    // Inicializar las posiciones a 0
+    for (int i = 0; i < K; i++) {
+        grafo_actual.posiciones[i].x = 0;
+        grafo_actual.posiciones[i].y = 0;
+    }
+    
     limpiar_matriz();
     limpiar_posiciones();
     crear_matriz_ui(K);
@@ -163,8 +176,8 @@ void actualizar_matriz_simetrica(int fila, int col) {
     grafo_actual.matriz_adyacencia[col][fila] = valor;
     
     if (matriz_entries[col][fila]) {
-        char str[2];
-        snprintf(str, 2, "%d", valor);
+        char str[16];
+        snprintf(str, sizeof(str), "%d", valor);
         gtk_entry_set_text(matriz_entries[col][fila], str);
     }
 }
@@ -319,12 +332,32 @@ void cargar_grafo_archivo() {
                 crear_matriz_ui(K);
                 crear_posiciones_ui(K);
                 
+                // Bloquear señales temporalmente para evitar que los callbacks interfieran
                 for (int i = 0; i < K; i++) {
                     for (int j = 0; j < K; j++) {
                         if (matriz_entries[i][j]) {
-                            char str[2];
-                            snprintf(str, 2, "%d", grafo_actual.matriz_adyacencia[i][j]);
+                            g_signal_handlers_block_by_func(matriz_entries[i][j], 
+                                (gpointer)on_matriz_changed, NULL);
+                        }
+                    }
+                }
+                
+                for (int i = 0; i < K; i++) {
+                    for (int j = 0; j < K; j++) {
+                        if (matriz_entries[i][j]) {
+                            char str[16];
+                            snprintf(str, sizeof(str), "%d", grafo_actual.matriz_adyacencia[i][j]);
                             gtk_entry_set_text(matriz_entries[i][j], str);
+                        }
+                    }
+                }
+                
+                // Desbloquear señales después de actualizar
+                for (int i = 0; i < K; i++) {
+                    for (int j = 0; j < K; j++) {
+                        if (matriz_entries[i][j]) {
+                            g_signal_handlers_unblock_by_func(matriz_entries[i][j], 
+                                (gpointer)on_matriz_changed, NULL);
                         }
                     }
                 }
@@ -504,24 +537,34 @@ void crear_matriz_ui(int K) {
         for (int j = 0; j < K; j++) {
             GtkWidget *entry = gtk_entry_new();
             gtk_entry_set_max_length(GTK_ENTRY(entry), 1);
-            gtk_entry_set_text(GTK_ENTRY(entry), "0");
             gtk_entry_set_width_chars(GTK_ENTRY(entry), 2);
-            
-            if (i == j) {
-                gtk_widget_set_sensitive(entry, FALSE);
-                gtk_entry_set_text(GTK_ENTRY(entry), "0");
-            }
             
             int *coords = malloc(2 * sizeof(int));
             coords[0] = i;
             coords[1] = j;
             
             g_object_set_data(G_OBJECT(entry), "coords", coords);
+            
+            // Bloquear señal temporalmente para evitar callback durante inicialización
             g_signal_connect(entry, "changed", G_CALLBACK(on_matriz_changed), coords);
+            g_signal_handlers_block_by_func(entry, (gpointer)on_matriz_changed, NULL);
+            
+            if (i == j) {
+                gtk_widget_set_sensitive(entry, FALSE);
+                gtk_entry_set_text(GTK_ENTRY(entry), "0");
+                grafo_actual.matriz_adyacencia[i][j] = 0;
+            } else {
+                // Usar el valor existente de la matriz si está disponible, sino inicializar a 0
+                char str[16];
+                snprintf(str, sizeof(str), "%d", grafo_actual.matriz_adyacencia[i][j]);
+                gtk_entry_set_text(GTK_ENTRY(entry), str);
+            }
             
             gtk_grid_attach(GTK_GRID(grid_matriz), entry, j + 1, i + 1, 1, 1);
             matriz_entries[i][j] = GTK_ENTRY(entry);
-            grafo_actual.matriz_adyacencia[i][j] = 0;
+            
+            // Desbloquear señal después de inicializar
+            g_signal_handlers_unblock_by_func(entry, (gpointer)on_matriz_changed, NULL);
         }
     }
     
