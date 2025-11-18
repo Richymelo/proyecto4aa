@@ -591,18 +591,23 @@ void crear_posiciones_ui(int K) {
         GtkWidget *lbl = gtk_label_new(label);
         gtk_grid_attach(GTK_GRID(grid_posiciones), lbl, 0, i + 1, 1, 1);
         
-        GtkAdjustment *adj_x = gtk_adjustment_new(0, 0, 1000, 1, 10, 0);
+        // Usar el valor existente de la posición si está disponible, sino inicializar a 0
+        double valor_x = grafo_actual.posiciones[i].x;
+        double valor_y = grafo_actual.posiciones[i].y;
+        
+        GtkAdjustment *adj_x = gtk_adjustment_new(valor_x, 0, 1000, 1, 10, 0);
         GtkWidget *spin_x = gtk_spin_button_new(adj_x, 1, 0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin_x), valor_x);
         gtk_grid_attach(GTK_GRID(grid_posiciones), spin_x, 1, i + 1, 1, 1);
         pos_x_spins[i] = GTK_SPIN_BUTTON(spin_x);
         
-        GtkAdjustment *adj_y = gtk_adjustment_new(0, 0, 1000, 1, 10, 0);
+        GtkAdjustment *adj_y = gtk_adjustment_new(valor_y, 0, 1000, 1, 10, 0);
         GtkWidget *spin_y = gtk_spin_button_new(adj_y, 1, 0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin_y), valor_y);
         gtk_grid_attach(GTK_GRID(grid_posiciones), spin_y, 2, i + 1, 1, 1);
         pos_y_spins[i] = GTK_SPIN_BUTTON(spin_y);
         
-        grafo_actual.posiciones[i].x = 0;
-        grafo_actual.posiciones[i].y = 0;
+        // No inicializar a 0 aquí, mantener los valores existentes si ya están cargados
     }
     
     gtk_widget_show_all(grid_posiciones);
@@ -1176,6 +1181,27 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\usepackage{graphicx}\n");
     fprintf(f, "\\usepackage{amsmath}\n");
     fprintf(f, "\\usepackage{xcolor}\n");
+    // Configurar búsqueda de imágenes en el directorio actual (compatible con Linux)
+    fprintf(f, "\\graphicspath{{./}{./images/}{./imagenes/}}\n");
+    fprintf(f, "\\usepackage{pdftexcmds}\n");
+    // Definir comando para incluir imágenes opcionales (compatible con Linux)
+    // Este comando verifica si la imagen existe antes de intentar incluirla
+    fprintf(f, "\\makeatletter\n");
+    fprintf(f, "\\newcommand{\\includegraphicsoptional}[2][]{%\n");
+    fprintf(f, "  \\begingroup\n");
+    fprintf(f, "  \\pdf@unifilename{#2}%\n");
+    fprintf(f, "  \\edef\\@imgdate{\\pdf@filemoddate{#2}}%\n");
+    fprintf(f, "  \\def\\@imgtest{}%\n");
+    fprintf(f, "  \\ifx\\@imgdate\\@imgtest\n");
+    fprintf(f, "    % Imagen no encontrada - mostrar placeholder\n");
+    fprintf(f, "    \\fbox{\\parbox{0.3\\textwidth}{\\centering\\vspace{1.5cm}\\textcolor{gray}{\\textit{[Imagen no disponible]}}\\\\ \\small{(#2)}\\vspace{1.5cm}}}%\n");
+    fprintf(f, "  \\else\n");
+    fprintf(f, "    % Imagen encontrada - incluir normalmente\n");
+    fprintf(f, "    \\includegraphics[#1]{#2}%\n");
+    fprintf(f, "  \\fi\n");
+    fprintf(f, "  \\endgroup\n");
+    fprintf(f, "}\n");
+    fprintf(f, "\\makeatother\n");
     fprintf(f, "\\geometry{a4paper, margin=2.5cm}\n");
     fprintf(f, "\\title{Proyecto 4: Hamilton, Euler y Grafos, Parte I}\n");
     fprintf(f, "\\author{Miembros del Grupo:\\\\Ricardo Castro\\\\Juan Carlos Valverde\\\\~\\\\Curso: Analisis de Algoritmos\\\\~\\\\Semestres: II 2025}\n");
@@ -1189,7 +1215,7 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\section{William Rowan Hamilton}\n\n");
     fprintf(f, "\\begin{figure}[h]\n");
     fprintf(f, "\\centering\n");
-    fprintf(f, "\\includegraphics[width=0.3\\textwidth]{hamilton.jpg}\n");
+    fprintf(f, "\\includegraphicsoptional[width=0.3\\textwidth]{hamilton.jpg}\n");
     fprintf(f, "\\caption{William Rowan Hamilton (1805-1865)}\n");
     fprintf(f, "\\end{figure}\n\n");
     
@@ -1367,7 +1393,7 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\section{Leonhard Euler}\n\n");
     fprintf(f, "\\begin{figure}[h]\n");
     fprintf(f, "\\centering\n");
-    fprintf(f, "\\includegraphics[width=0.3\\textwidth]{euler.jpg}\n");
+    fprintf(f, "\\includegraphicsoptional[width=0.3\\textwidth]{euler.jpg}\n");
     fprintf(f, "\\caption{Leonhard Euler (1707-1783)}\n");
     fprintf(f, "\\end{figure}\n\n");
     
@@ -2006,7 +2032,7 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\section{Carl Hierholzer}\n\n");
     fprintf(f, "\\begin{figure}[h]\n");
     fprintf(f, "\\centering\n");
-    fprintf(f, "\\includegraphics[width=0.3\\textwidth]{hierholzer.jpg}\n");
+    fprintf(f, "\\includegraphicsoptional[width=0.3\\textwidth]{hierholzer.jpg}\n");
     fprintf(f, "\\caption{Carl Hierholzer (1840-1871)}\n");
     fprintf(f, "\\end{figure}\n\n");
     
@@ -2089,7 +2115,7 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\section{Pierre-Henry Fleury}\n\n");
     fprintf(f, "\\begin{figure}[h]\n");
     fprintf(f, "\\centering\n");
-    fprintf(f, "\\includegraphics[width=0.3\\textwidth]{fleury.jpg}\n");
+    fprintf(f, "\\includegraphicsoptional[width=0.3\\textwidth]{fleury.jpg}\n");
     fprintf(f, "\\caption{Pierre-Henry Fleury (siglo XIX)}\n");
     fprintf(f, "\\end{figure}\n\n");
     
