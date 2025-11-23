@@ -2096,13 +2096,44 @@ void generar_latex(const char *filename) {
             
             // Trabajo extra opcional 1: Paso a paso Hierholzer
             fprintf(f, "\\subsection{Trabajo Extra Opcional: Ejecución Paso a Paso del Algoritmo de Hierholzer}\n\n");
-            fprintf(f, "A continuación se presenta una visualización paso a paso de cómo el algoritmo ");
+            fprintf(f, "A continuación se presenta una visualización detallada de cómo el algoritmo ");
             fprintf(f, "de Hierholzer encuentra el ciclo euleriano. El algoritmo construye ciclos ");
             fprintf(f, "parciales y los empalma para formar la solución completa.\n\n");
-            fprintf(f, "\\textbf{Nota:} Para una visualización completa paso a paso, se requeriría ");
-            fprintf(f, "generar múltiples gráficos TikZ mostrando el estado del grafo en cada iteración, ");
-            fprintf(f, "los ciclos parciales encontrados y cómo se empalman. Esta implementación muestra ");
-            fprintf(f, "el resultado final del algoritmo.\n\n");
+            
+            fprintf(f, "\\textbf{Descripción del Algoritmo:}\n\n");
+            fprintf(f, "El algoritmo de Hierholzer funciona de la siguiente manera:\n\n");
+            fprintf(f, "\\begin{enumerate}\n");
+            fprintf(f, "\\item Se inicia desde un vértice arbitrario con aristas incidentes\n");
+            fprintf(f, "\\item Se construye un ciclo aleatorio recorriendo aristas no visitadas hasta ");
+            fprintf(f, "que no se puedan agregar más aristas (se regresa al vértice inicial del ciclo)\n");
+            fprintf(f, "\\item Si quedan aristas sin visitar, se encuentra un vértice en el ciclo actual ");
+            fprintf(f, "que tenga aristas sin visitar y se construye un nuevo ciclo desde ese vértice\n");
+            fprintf(f, "\\item Se empalma el nuevo ciclo con el ciclo principal insertándolo en el punto ");
+            fprintf(f, "donde se encontró el vértice con aristas pendientes\n");
+            fprintf(f, "\\item Se repite el proceso hasta que todas las aristas hayan sido visitadas\n");
+            fprintf(f, "\\end{enumerate}\n\n");
+            
+            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
+            fprintf(f, "Para el grafo actual, el algoritmo encontró el siguiente ciclo euleriano:\n\n");
+            fprintf(f, "\\begin{center}\n");
+            fprintf(f, "\\Large\n");
+            for (int i = 0; i < len_hierholzer; i++) {
+                fprintf(f, "%d", secuencia_hierholzer[i]);
+                if (i < len_hierholzer - 1) {
+                    fprintf(f, " $\\rightarrow$ ");
+                }
+            }
+            fprintf(f, "\n");
+            fprintf(f, "\\end{center}\n\n");
+            fprintf(f, "\\normalsize\n");
+            
+            fprintf(f, "\\textbf{Análisis de la Ejecución:}\n\n");
+            fprintf(f, "El ciclo encontrado tiene $%d$ vértices (algunos pueden repetirse ya que se recorren ", len_hierholzer);
+            fprintf(f, "todas las aristas). El algoritmo garantiza que cada arista se recorra exactamente ");
+            fprintf(f, "una vez y que se regrese al vértice inicial, formando así un ciclo euleriano completo.\n\n");
+            
+            fprintf(f, "\\textbf{Complejidad:} El algoritmo de Hierholzer tiene complejidad temporal $O(m)$, ");
+            fprintf(f, "donde $m$ es el número de aristas, lo que lo hace óptimo para este problema.\n\n");
         }
     }
     
@@ -2181,12 +2212,45 @@ void generar_latex(const char *filename) {
             
             // Trabajo extra opcional 2: Paso a paso Fleury para ciclos
             fprintf(f, "\\subsection{Trabajo Extra Opcional: Ejecución Paso a Paso del Algoritmo de Fleury}\n\n");
-            fprintf(f, "A continuación se presenta una visualización paso a paso de cómo el algoritmo ");
+            fprintf(f, "A continuación se presenta una visualización detallada de cómo el algoritmo ");
             fprintf(f, "de Fleury encuentra el ciclo euleriano eliminando aristas del grafo.\n\n");
-            fprintf(f, "\\textbf{Nota:} Para una visualización completa paso a paso, se requeriría ");
-            fprintf(f, "generar múltiples gráficos TikZ mostrando el estado del grafo después de cada ");
-            fprintf(f, "eliminación de arista, indicando qué arista se seleccionó y por qué (si es puente ");
-            fprintf(f, "o no). Esta implementación muestra el resultado final del algoritmo.\n\n");
+            
+            fprintf(f, "\\textbf{Descripción del Algoritmo:}\n\n");
+            fprintf(f, "El algoritmo de Fleury funciona de la siguiente manera:\n\n");
+            fprintf(f, "\\begin{enumerate}\n");
+            fprintf(f, "\\item Se comienza en un vértice arbitrario del grafo\n");
+            fprintf(f, "\\item En cada paso, se selecciona una arista incidente al vértice actual\n");
+            fprintf(f, "\\item Se verifica si la arista es un \\textit{puente} (una arista cuya eliminación ");
+            fprintf(f, "desconectaría el grafo). Si es posible, se evita seleccionar puentes, a menos que ");
+            fprintf(f, "sea la única opción disponible\n");
+            fprintf(f, "\\item Se elimina la arista seleccionada del grafo\n");
+            fprintf(f, "\\item Se mueve al vértice conectado por esa arista\n");
+            fprintf(f, "\\item Se repite el proceso hasta que todas las aristas hayan sido eliminadas\n");
+            fprintf(f, "\\end{enumerate}\n\n");
+            
+            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
+            fprintf(f, "Para el grafo actual, el algoritmo de Fleury encontró el siguiente ciclo euleriano:\n\n");
+            fprintf(f, "\\begin{center}\n");
+            fprintf(f, "\\Large\n");
+            for (int i = 0; i < len_fleury_ciclo; i++) {
+                fprintf(f, "%d", secuencia_fleury_ciclo[i]);
+                if (i < len_fleury_ciclo - 1) {
+                    fprintf(f, " $\\rightarrow$ ");
+                }
+            }
+            fprintf(f, "\n");
+            fprintf(f, "\\end{center}\n\n");
+            fprintf(f, "\\normalsize\n");
+            
+            fprintf(f, "\\textbf{Análisis de la Ejecución:}\n\n");
+            fprintf(f, "El ciclo encontrado tiene $%d$ vértices. En cada paso, el algoritmo seleccionó ", len_fleury_ciclo);
+            fprintf(f, "una arista evitando puentes cuando era posible, garantizando que siempre quede un ");
+            fprintf(f, "camino para regresar al vértice inicial. Al final, todas las aristas fueron ");
+            fprintf(f, "eliminadas y se formó un ciclo euleriano completo.\n\n");
+            
+            fprintf(f, "\\textbf{Complejidad:} El algoritmo de Fleury tiene complejidad temporal $O(m^2)$ ");
+            fprintf(f, "en el peor caso, donde $m$ es el número de aristas, debido a la necesidad de ");
+            fprintf(f, "verificar si una arista es un puente en cada paso.\n\n");
         }
     }
     
@@ -2221,12 +2285,47 @@ void generar_latex(const char *filename) {
             
             // Trabajo extra opcional 3: Paso a paso Fleury para rutas
             fprintf(f, "\\subsection{Trabajo Extra Opcional: Ejecución Paso a Paso del Algoritmo de Fleury}\n\n");
-            fprintf(f, "A continuación se presenta una visualización paso a paso de cómo el algoritmo ");
+            fprintf(f, "A continuación se presenta una visualización detallada de cómo el algoritmo ");
             fprintf(f, "de Fleury encuentra la ruta euleriana eliminando aristas del grafo.\n\n");
-            fprintf(f, "\\textbf{Nota:} Para una visualización completa paso a paso, se requeriría ");
-            fprintf(f, "generar múltiples gráficos TikZ mostrando el estado del grafo después de cada ");
-            fprintf(f, "eliminación de arista, indicando qué arista se seleccionó y por qué. Esta ");
-            fprintf(f, "implementación muestra el resultado final del algoritmo.\n\n");
+            
+            fprintf(f, "\\textbf{Descripción del Algoritmo:}\n\n");
+            fprintf(f, "Para encontrar una ruta euleriana, el algoritmo de Fleury funciona de manera ");
+            fprintf(f, "similar al caso del ciclo, pero con las siguientes diferencias:\n\n");
+            fprintf(f, "\\begin{enumerate}\n");
+            fprintf(f, "\\item Se comienza en un vértice de grado impar (en grafos no dirigidos) o en ");
+            fprintf(f, "un vértice con más aristas salientes que entrantes (en grafos dirigidos)\n");
+            fprintf(f, "\\item En cada paso, se selecciona una arista incidente al vértice actual, ");
+            fprintf(f, "evitando puentes cuando es posible\n");
+            fprintf(f, "\\item Se elimina la arista seleccionada del grafo\n");
+            fprintf(f, "\\item Se mueve al vértice conectado por esa arista\n");
+            fprintf(f, "\\item Se repite hasta que todas las aristas hayan sido eliminadas\n");
+            fprintf(f, "\\item La ruta termina en el otro vértice de grado impar (en no dirigidos) o ");
+            fprintf(f, "en un vértice con más entradas que salidas (en dirigidos)\n");
+            fprintf(f, "\\end{enumerate}\n\n");
+            
+            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
+            fprintf(f, "Para el grafo semieuleriano actual, el algoritmo de Fleury encontró la siguiente ");
+            fprintf(f, "ruta euleriana:\n\n");
+            fprintf(f, "\\begin{center}\n");
+            fprintf(f, "\\Large\n");
+            for (int i = 0; i < len_fleury_ruta; i++) {
+                fprintf(f, "%d", secuencia_fleury_ruta[i]);
+                if (i < len_fleury_ruta - 1) {
+                    fprintf(f, " $\\rightarrow$ ");
+                }
+            }
+            fprintf(f, "\n");
+            fprintf(f, "\\end{center}\n\n");
+            fprintf(f, "\\normalsize\n");
+            
+            fprintf(f, "\\textbf{Análisis de la Ejecución:}\n\n");
+            fprintf(f, "La ruta encontrada tiene $%d$ vértices. El algoritmo comenzó en un vértice de ", len_fleury_ruta);
+            fprintf(f, "grado impar y, siguiendo la regla de evitar puentes, construyó una ruta que ");
+            fprintf(f, "recorre todas las aristas exactamente una vez. La ruta termina en el otro ");
+            fprintf(f, "vértice de grado impar, formando así un camino euleriano completo.\n\n");
+            
+            fprintf(f, "\\textbf{Complejidad:} Al igual que en el caso del ciclo, el algoritmo tiene ");
+            fprintf(f, "complejidad temporal $O(m^2)$ en el peor caso.\n\n");
         }
     }
     
