@@ -28,6 +28,33 @@ typedef struct {
     Coordenada posiciones[MAX_NODOS];
 } Grafo;
 
+// Estructura para rastrear pasos del algoritmo de Hierholzer
+typedef struct {
+    int matriz_restante[MAX_NODOS][MAX_NODOS];  // Matriz de aristas no usadas
+    int ciclo_actual[MAX_NODOS * MAX_NODOS];    // Ciclo parcial actual
+    int len_ciclo_actual;                       // Longitud del ciclo actual
+    int ciclos_completos[MAX_NODOS][MAX_NODOS * MAX_NODOS];  // Ciclos completos encontrados
+    int len_ciclos_completos[MAX_NODOS];        // Longitudes de cada ciclo completo
+    int num_ciclos_completos;                   // Número de ciclos completos
+    char descripcion[512];                      // Descripción del paso
+    int tipo_paso;                              // 0: inicio, 1: agregar arista, 2: completar ciclo, 3: empalmar
+} PasoHierholzer;
+
+// Estructura para rastrear pasos del algoritmo de Fleury
+typedef struct {
+    int matriz_restante[MAX_NODOS][MAX_NODOS];  // Matriz de aristas restantes después de eliminar
+    int ruta_actual[MAX_NODOS * MAX_NODOS];     // Ruta construida hasta el momento
+    int len_ruta_actual;                        // Longitud de la ruta actual
+    int vertice_actual;                          // Vértice actual en el algoritmo
+    int arista_elegida_u;                        // Vértice origen de la arista elegida
+    int arista_elegida_v;                        // Vértice destino de la arista elegida
+    int es_puente;                               // 1 si la arista elegida es un puente, 0 si no
+    char descripcion[512];                       // Descripción del paso y razón de la elección
+    int tipo_paso;                               // 0: inicio, 1: elegir y eliminar arista, 2: final
+} PasoFleury;
+
+#define MAX_PASOS 200
+
 static Grafo grafo_actual;
 static GtkBuilder *builder;
 static GtkWidget *window_main;
@@ -56,9 +83,15 @@ bool encontrar_ruta_hamiltoniana(int *secuencia, int *longitud);
 bool es_euleriano();
 bool es_semieuleriano();
 int encontrar_ciclo_euleriano_hierholzer(int *secuencia);
+int encontrar_ciclo_euleriano_hierholzer_paso_a_paso(int *secuencia, PasoHierholzer *pasos, int *num_pasos);
 int encontrar_ciclo_euleriano_fleury(int *secuencia);
+int encontrar_ciclo_euleriano_fleury_paso_a_paso(int *secuencia, PasoFleury *pasos, int *num_pasos);
 int encontrar_ruta_euleriana_fleury(int *secuencia);
+int encontrar_ruta_euleriana_fleury_paso_a_paso(int *secuencia, PasoFleury *pasos, int *num_pasos);
+bool es_puente(int matriz[MAX_NODOS][MAX_NODOS], int u, int v, int K);
 void generar_latex(const char *filename);
+void generar_tikz_paso_hierholzer(FILE *f, PasoHierholzer *paso, int paso_num, int min_x, int min_y, double escala);
+void generar_tikz_paso_fleury(FILE *f, PasoFleury *paso, int paso_num, int min_x, int min_y, double escala);
 void compilar_y_mostrar_pdf(const char *texfile);
 void guardar_grafo_archivo();
 void cargar_grafo_archivo();
@@ -989,6 +1022,339 @@ int encontrar_ciclo_euleriano_hierholzer(int *secuencia) {
     return res_len;
 }
 
+// Algoritmo de Hierholzer paso a paso para visualización
+int encontrar_ciclo_euleriano_hierholzer_paso_a_paso(int *secuencia, PasoHierholzer *pasos, int *num_pasos) {
+    int K = grafo_actual.K;
+    if (!es_euleriano()) return 0;
+    
+    *num_pasos = 0;
+    
+    // Crear copia de la matriz de adyacencia para modificar
+    int matriz_copia[MAX_NODOS][MAX_NODOS];
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            matriz_copia[i][j] = grafo_actual.matriz_adyacencia[i][j];
+        }
+    }
+    
+    // Encontrar vértice inicial
+    int inicio = 0;
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            if (matriz_copia[i][j] > 0) {
+                inicio = i;
+                goto encontrado;
+            }
+        }
+    }
+    encontrado:
+    
+    // Guardar paso inicial
+    if (*num_pasos < MAX_PASOS) {
+        PasoHierholzer *p = &pasos[*num_pasos];
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                p->matriz_restante[i][j] = matriz_copia[i][j];
+            }
+        }
+        p->len_ciclo_actual = 1;
+        p->ciclo_actual[0] = inicio;
+        p->num_ciclos_completos = 0;
+        p->tipo_paso = 0;
+        snprintf(p->descripcion, sizeof(p->descripcion), 
+                "Inicio del algoritmo. Se comienza desde el vértice %d.", inicio);
+        (*num_pasos)++;
+    }
+    
+    // Pila para el algoritmo
+    int pila[MAX_NODOS * MAX_NODOS];
+    int top = 0;
+    pila[top++] = inicio;
+    
+    int resultado[MAX_NODOS * MAX_NODOS];
+    int res_len = 0;
+    
+    // Rastrear el camino actual en la pila
+    int camino_actual[MAX_NODOS * MAX_NODOS];
+    int len_camino = 1;
+    camino_actual[0] = inicio;
+    
+    // Ciclos completos encontrados (se construyen cuando regresamos a un vértice con aristas)
+    int num_ciclos_completos = 0;
+    int ciclos_completos[MAX_NODOS][MAX_NODOS * MAX_NODOS];
+    int len_ciclos_completos[MAX_NODOS];
+    int vertices_inicio_ciclo[MAX_NODOS];
+    
+    while (top > 0) {
+        int u = pila[top - 1];
+        
+        // Buscar arista no usada desde u
+        int v = -1;
+        for (int i = 0; i < K; i++) {
+            if (matriz_copia[u][i] > 0) {
+                v = i;
+                break;
+            }
+        }
+        
+        if (v != -1) {
+            // Guardar paso: agregar arista
+            if (*num_pasos < MAX_PASOS) {
+                PasoHierholzer *p = &pasos[*num_pasos];
+                for (int i = 0; i < K; i++) {
+                    for (int j = 0; j < K; j++) {
+                        p->matriz_restante[i][j] = matriz_copia[i][j];
+                    }
+                }
+                // Copiar camino actual (pila)
+                p->len_ciclo_actual = len_camino;
+                for (int i = 0; i < len_camino; i++) {
+                    p->ciclo_actual[i] = camino_actual[i];
+                }
+                // Copiar ciclos completos
+                p->num_ciclos_completos = num_ciclos_completos;
+                for (int i = 0; i < num_ciclos_completos; i++) {
+                    p->len_ciclos_completos[i] = len_ciclos_completos[i];
+                    for (int j = 0; j < len_ciclos_completos[i]; j++) {
+                        p->ciclos_completos[i][j] = ciclos_completos[i][j];
+                    }
+                }
+                p->tipo_paso = 1;
+                snprintf(p->descripcion, sizeof(p->descripcion), 
+                        "Se agrega la arista %d$\\rightarrow$%d. Se continúa construyendo el ciclo parcial.", u, v);
+                (*num_pasos)++;
+            }
+            
+            // Remover arista
+            matriz_copia[u][v]--;
+            if (grafo_actual.tipo == NO_DIRIGIDO) {
+                matriz_copia[v][u]--;
+            }
+            pila[top++] = v;
+            camino_actual[len_camino++] = v;
+        } else {
+            // No hay más aristas desde u, agregar a resultado (backtrack)
+            resultado[res_len++] = u;
+            
+            // Verificar si estamos completando un ciclo (regresamos a un vértice que ya estaba en el camino)
+            // y ese vértice tiene más aristas pendientes o es el inicio
+            int encontrado_en_camino = -1;
+            for (int i = 0; i < len_camino - 1; i++) {
+                if (camino_actual[i] == u) {
+                    encontrado_en_camino = i;
+                    break;
+                }
+            }
+            
+            if (encontrado_en_camino >= 0 || (u == inicio && res_len > 1)) {
+                // Completamos un ciclo parcial
+                int inicio_ciclo = (encontrado_en_camino >= 0) ? encontrado_en_camino : 0;
+                int len_ciclo = len_camino - inicio_ciclo;
+                
+                // Guardar ciclo completo
+                for (int i = 0; i < len_ciclo; i++) {
+                    ciclos_completos[num_ciclos_completos][i] = camino_actual[inicio_ciclo + i];
+                }
+                len_ciclos_completos[num_ciclos_completos] = len_ciclo;
+                vertices_inicio_ciclo[num_ciclos_completos] = u;
+                num_ciclos_completos++;
+                
+                // Guardar paso: completar ciclo
+                if (*num_pasos < MAX_PASOS) {
+                    PasoHierholzer *p = &pasos[*num_pasos];
+                    for (int i = 0; i < K; i++) {
+                        for (int j = 0; j < K; j++) {
+                            p->matriz_restante[i][j] = matriz_copia[i][j];
+                        }
+                    }
+                    p->len_ciclo_actual = 0;  // Ciclo completado, se reinicia
+                    p->num_ciclos_completos = num_ciclos_completos;
+                    for (int i = 0; i < num_ciclos_completos; i++) {
+                        p->len_ciclos_completos[i] = len_ciclos_completos[i];
+                        for (int j = 0; j < len_ciclos_completos[i]; j++) {
+                            p->ciclos_completos[i][j] = ciclos_completos[i][j];
+                        }
+                    }
+                    p->tipo_paso = 2;
+                    snprintf(p->descripcion, sizeof(p->descripcion), 
+                            "Se completa un ciclo parcial que termina en el vértice %d. ", u);
+                    if (num_ciclos_completos > 1) {
+                        strcat(p->descripcion, "Este ciclo se empalmará con los ciclos anteriores.");
+                    } else {
+                        strcat(p->descripcion, "Este es el primer ciclo encontrado.");
+                    }
+                    (*num_pasos)++;
+                }
+                
+                // Reiniciar camino desde u si tiene más aristas pendientes
+                len_camino = 1;
+                camino_actual[0] = u;
+            } else {
+                // Solo backtrack, no completamos ciclo aún
+                len_camino--;
+            }
+            
+            top--;
+        }
+    }
+    
+    // Copiar resultado invertido
+    for (int i = 0; i < res_len; i++) {
+        secuencia[i] = resultado[res_len - 1 - i];
+    }
+    
+    return res_len;
+}
+
+// Función para generar diagrama TikZ de un paso de Hierholzer
+void generar_tikz_paso_hierholzer(FILE *f, PasoHierholzer *paso, int paso_num, int min_x, int min_y, double escala) {
+    int K = grafo_actual.K;
+    
+    fprintf(f, "\\begin{center}\n");
+    fprintf(f, "\\begin{tikzpicture}[scale=%.2f]\n", escala);
+    
+    // Dibujar aristas no usadas (grises)
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            if (paso->matriz_restante[i][j] > 0) {
+                double x1 = grafo_actual.posiciones[i].x - min_x;
+                double y1 = grafo_actual.posiciones[i].y - min_y;
+                double x2 = grafo_actual.posiciones[j].x - min_x;
+                double y2 = grafo_actual.posiciones[j].y - min_y;
+                
+                if (grafo_actual.tipo == DIRIGIDO) {
+                    fprintf(f, "\\draw[->, gray!40, dashed, thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+                } else {
+                    if (i < j) {
+                        fprintf(f, "\\draw[gray!40, dashed, thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Dibujar ciclos completos en diferentes colores (no usar rojo, reservado para ciclo actual)
+    const char *colores_ciclos[] = {"blue", "green!70!black", "orange", "purple", "brown", "cyan"};
+    for (int c = 0; c < paso->num_ciclos_completos; c++) {
+        const char *color = colores_ciclos[c % 6];
+        for (int i = 0; i < paso->len_ciclos_completos[c] - 1; i++) {
+            int u = paso->ciclos_completos[c][i];
+            int v = paso->ciclos_completos[c][i + 1];
+            double x1 = grafo_actual.posiciones[u].x - min_x;
+            double y1 = grafo_actual.posiciones[u].y - min_y;
+            double x2 = grafo_actual.posiciones[v].x - min_x;
+            double y2 = grafo_actual.posiciones[v].y - min_y;
+            
+            if (grafo_actual.tipo == DIRIGIDO) {
+                fprintf(f, "\\draw[->, %s, very thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", color, x1, y1, x2, y2);
+            } else {
+                fprintf(f, "\\draw[%s, very thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", color, x1, y1, x2, y2);
+            }
+        }
+    }
+    
+    // Dibujar ciclo actual en construcción (rojo más intenso)
+    if (paso->len_ciclo_actual > 1) {
+        for (int i = 0; i < paso->len_ciclo_actual - 1; i++) {
+            int u = paso->ciclo_actual[i];
+            int v = paso->ciclo_actual[i + 1];
+            double x1 = grafo_actual.posiciones[u].x - min_x;
+            double y1 = grafo_actual.posiciones[u].y - min_y;
+            double x2 = grafo_actual.posiciones[v].x - min_x;
+            double y2 = grafo_actual.posiciones[v].y - min_y;
+            
+            if (grafo_actual.tipo == DIRIGIDO) {
+                fprintf(f, "\\draw[->, red, ultra thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+            } else {
+                fprintf(f, "\\draw[red, ultra thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+            }
+        }
+    }
+    
+    // Dibujar nodos
+    for (int i = 0; i < K; i++) {
+        double x = grafo_actual.posiciones[i].x - min_x;
+        double y = grafo_actual.posiciones[i].y - min_y;
+        fprintf(f, "\\node[circle, draw=black, fill=white, minimum size=0.8cm, font=\\scriptsize] (n%d) at (%.2f,%.2f) {%d};\n",
+                i, x, y, i);
+    }
+    
+    fprintf(f, "\\end{tikzpicture}\n");
+    fprintf(f, "\\end{center}\n\n");
+}
+
+// Función auxiliar para contar componentes conexas usando DFS
+int contar_componentes(int matriz[MAX_NODOS][MAX_NODOS], int K) {
+    bool visitado[MAX_NODOS];
+    for (int i = 0; i < K; i++) {
+        visitado[i] = false;
+    }
+    
+    int componentes = 0;
+    for (int i = 0; i < K; i++) {
+        // Verificar si el vértice tiene aristas
+        bool tiene_aristas = false;
+        for (int j = 0; j < K; j++) {
+            if (matriz[i][j] > 0) {
+                tiene_aristas = true;
+                break;
+            }
+        }
+        
+        if (tiene_aristas && !visitado[i]) {
+            componentes++;
+            // DFS para marcar todos los vértices conectados
+            int pila[MAX_NODOS];
+            int top = 0;
+            pila[top++] = i;
+            visitado[i] = true;
+            
+            while (top > 0) {
+                int actual = pila[--top];
+                for (int j = 0; j < K; j++) {
+                    if (matriz[actual][j] > 0 && !visitado[j]) {
+                        visitado[j] = true;
+                        pila[top++] = j;
+                    }
+                }
+            }
+        }
+    }
+    
+    return componentes;
+}
+
+// Función auxiliar para verificar si una arista es un puente
+// Un puente es una arista cuya eliminación desconecta el grafo
+bool es_puente(int matriz[MAX_NODOS][MAX_NODOS], int u, int v, int K) {
+    // Contar componentes antes de eliminar la arista
+    int componentes_antes = contar_componentes(matriz, K);
+    
+    // Crear copia temporal de la matriz
+    int matriz_temp[MAX_NODOS][MAX_NODOS];
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            matriz_temp[i][j] = matriz[i][j];
+        }
+    }
+    
+    // Eliminar la arista temporalmente
+    if (matriz_temp[u][v] > 0) {
+        matriz_temp[u][v]--;
+        if (grafo_actual.tipo == NO_DIRIGIDO) {
+            matriz_temp[v][u]--;
+        }
+    } else {
+        return false; // La arista no existe
+    }
+    
+    // Contar componentes después de eliminar la arista
+    int componentes_despues = contar_componentes(matriz_temp, K);
+    
+    // Si el número de componentes aumenta, la arista es un puente
+    return componentes_despues > componentes_antes;
+}
+
 // Algoritmo de Fleury para encontrar ciclo euleriano
 int encontrar_ciclo_euleriano_fleury(int *secuencia) {
     int K = grafo_actual.K;
@@ -1059,6 +1425,169 @@ int encontrar_ciclo_euleriano_fleury(int *secuencia) {
         
         actual = siguiente;
         resultado[res_len++] = actual;
+    }
+    
+    for (int i = 0; i < res_len; i++) {
+        secuencia[i] = resultado[i];
+    }
+    
+    return res_len;
+}
+
+// Algoritmo de Fleury paso a paso para encontrar ciclo euleriano
+int encontrar_ciclo_euleriano_fleury_paso_a_paso(int *secuencia, PasoFleury *pasos, int *num_pasos) {
+    int K = grafo_actual.K;
+    if (!es_euleriano()) return 0;
+    
+    *num_pasos = 0;
+    
+    // Crear copia de la matriz
+    int matriz_copia[MAX_NODOS][MAX_NODOS];
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            matriz_copia[i][j] = grafo_actual.matriz_adyacencia[i][j];
+        }
+    }
+    
+    // Encontrar vértice inicial
+    int inicio = 0;
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            if (matriz_copia[i][j] > 0) {
+                inicio = i;
+                goto encontrado_fleury_paso;
+            }
+        }
+    }
+    encontrado_fleury_paso:
+    
+    // Guardar paso inicial
+    if (*num_pasos < MAX_PASOS) {
+        PasoFleury *p = &pasos[*num_pasos];
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                p->matriz_restante[i][j] = matriz_copia[i][j];
+            }
+        }
+        p->len_ruta_actual = 1;
+        p->ruta_actual[0] = inicio;
+        p->vertice_actual = inicio;
+        p->arista_elegida_u = -1;
+        p->arista_elegida_v = -1;
+        p->es_puente = 0;
+        p->tipo_paso = 0;
+        snprintf(p->descripcion, sizeof(p->descripcion), 
+                "Inicio del algoritmo. Se comienza desde el vértice %d.", inicio);
+        (*num_pasos)++;
+    }
+    
+    int resultado[MAX_NODOS * MAX_NODOS];
+    int res_len = 0;
+    int actual = inicio;
+    
+    resultado[res_len++] = actual;
+    
+    while (true) {
+        // Contar aristas restantes
+        int aristas_restantes = 0;
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                aristas_restantes += matriz_copia[i][j];
+            }
+        }
+        if (aristas_restantes == 0) break;
+        
+        // Buscar siguiente arista (preferir no-puente)
+        int siguiente = -1;
+        int es_puente_elegido = 0;
+        bool hay_no_puente = false;
+        
+        // Primero, buscar aristas que NO sean puentes
+        for (int i = 0; i < K; i++) {
+            if (matriz_copia[actual][i] > 0) {
+                if (!es_puente(matriz_copia, actual, i, K)) {
+                    siguiente = i;
+                    hay_no_puente = true;
+                    es_puente_elegido = 0;
+                    break;
+                }
+            }
+        }
+        
+        // Si no hay aristas no-puente, usar cualquier arista disponible
+        if (!hay_no_puente) {
+            for (int i = 0; i < K; i++) {
+                if (matriz_copia[actual][i] > 0) {
+                    siguiente = i;
+                    es_puente_elegido = es_puente(matriz_copia, actual, i, K) ? 1 : 0;
+                    break;
+                }
+            }
+        }
+        
+        if (siguiente == -1) break;
+        
+        // Guardar paso antes de eliminar la arista
+        if (*num_pasos < MAX_PASOS) {
+            PasoFleury *p = &pasos[*num_pasos];
+            for (int i = 0; i < K; i++) {
+                for (int j = 0; j < K; j++) {
+                    p->matriz_restante[i][j] = matriz_copia[i][j];
+                }
+            }
+            p->len_ruta_actual = res_len;
+            for (int i = 0; i < res_len; i++) {
+                p->ruta_actual[i] = resultado[i];
+            }
+            p->vertice_actual = actual;
+            p->arista_elegida_u = actual;
+            p->arista_elegida_v = siguiente;
+            p->es_puente = es_puente_elegido;
+            p->tipo_paso = 1;
+            
+            if (es_puente_elegido) {
+                snprintf(p->descripcion, sizeof(p->descripcion), 
+                        "Se elige la arista %d$\\rightarrow$%d. Esta arista es un \\textit{puente} (su eliminación desconectaría el grafo), pero es la única opción disponible desde el vértice %d.", 
+                        actual, siguiente, actual);
+            } else {
+                snprintf(p->descripcion, sizeof(p->descripcion), 
+                        "Se elige la arista %d$\\rightarrow$%d. Esta arista NO es un puente, por lo que es segura eliminarla sin desconectar el grafo.", 
+                        actual, siguiente);
+            }
+            (*num_pasos)++;
+        }
+        
+        // Remover arista
+        matriz_copia[actual][siguiente]--;
+        if (grafo_actual.tipo == NO_DIRIGIDO) {
+            matriz_copia[siguiente][actual]--;
+        }
+        
+        actual = siguiente;
+        resultado[res_len++] = actual;
+    }
+    
+    // Guardar paso final
+    if (*num_pasos < MAX_PASOS) {
+        PasoFleury *p = &pasos[*num_pasos];
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                p->matriz_restante[i][j] = matriz_copia[i][j];
+            }
+        }
+        p->len_ruta_actual = res_len;
+        for (int i = 0; i < res_len; i++) {
+            p->ruta_actual[i] = resultado[i];
+        }
+        p->vertice_actual = resultado[res_len - 1];
+        p->arista_elegida_u = -1;
+        p->arista_elegida_v = -1;
+        p->es_puente = 0;
+        p->tipo_paso = 2;
+        snprintf(p->descripcion, sizeof(p->descripcion), 
+                "Finalización del algoritmo. Todas las aristas han sido eliminadas. Se ha construido un ciclo euleriano completo que regresa al vértice inicial %d.", 
+                inicio);
+        (*num_pasos)++;
     }
     
     for (int i = 0; i < res_len; i++) {
@@ -1157,6 +1686,259 @@ int encontrar_ruta_euleriana_fleury(int *secuencia) {
     }
     
     return res_len;
+}
+
+// Algoritmo de Fleury paso a paso para encontrar ruta euleriana
+int encontrar_ruta_euleriana_fleury_paso_a_paso(int *secuencia, PasoFleury *pasos, int *num_pasos) {
+    int K = grafo_actual.K;
+    if (!es_semieuleriano()) return 0;
+    
+    *num_pasos = 0;
+    
+    // Crear copia de la matriz
+    int matriz_copia[MAX_NODOS][MAX_NODOS];
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            matriz_copia[i][j] = grafo_actual.matriz_adyacencia[i][j];
+        }
+    }
+    
+    // Encontrar vértice inicial (grado impar en no dirigido, o con más salidas en dirigido)
+    int inicio = 0;
+    if (grafo_actual.tipo == NO_DIRIGIDO) {
+        for (int i = 0; i < K; i++) {
+            int grado = 0;
+            for (int j = 0; j < K; j++) {
+                grado += matriz_copia[i][j];
+            }
+            if (grado % 2 == 1) {
+                inicio = i;
+                break;
+            }
+        }
+    } else {
+        for (int i = 0; i < K; i++) {
+            int grado_entrada = 0, grado_salida = 0;
+            for (int j = 0; j < K; j++) {
+                grado_entrada += matriz_copia[j][i];
+                grado_salida += matriz_copia[i][j];
+            }
+            if (grado_salida > grado_entrada) {
+                inicio = i;
+                break;
+            }
+        }
+    }
+    
+    // Guardar paso inicial
+    if (*num_pasos < MAX_PASOS) {
+        PasoFleury *p = &pasos[*num_pasos];
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                p->matriz_restante[i][j] = matriz_copia[i][j];
+            }
+        }
+        p->len_ruta_actual = 1;
+        p->ruta_actual[0] = inicio;
+        p->vertice_actual = inicio;
+        p->arista_elegida_u = -1;
+        p->arista_elegida_v = -1;
+        p->es_puente = 0;
+        p->tipo_paso = 0;
+        snprintf(p->descripcion, sizeof(p->descripcion), 
+                "Inicio del algoritmo. Se comienza desde el vértice %d (vértice de grado impar para ruta euleriana).", inicio);
+        (*num_pasos)++;
+    }
+    
+    int resultado[MAX_NODOS * MAX_NODOS];
+    int res_len = 0;
+    int actual = inicio;
+    
+    resultado[res_len++] = actual;
+    
+    while (true) {
+        // Contar aristas restantes
+        int aristas_restantes = 0;
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                aristas_restantes += matriz_copia[i][j];
+            }
+        }
+        if (aristas_restantes == 0) break;
+        
+        // Buscar siguiente arista (preferir no-puente)
+        int siguiente = -1;
+        int es_puente_elegido = 0;
+        bool hay_no_puente = false;
+        
+        // Primero, buscar aristas que NO sean puentes
+        for (int i = 0; i < K; i++) {
+            if (matriz_copia[actual][i] > 0) {
+                if (!es_puente(matriz_copia, actual, i, K)) {
+                    siguiente = i;
+                    hay_no_puente = true;
+                    es_puente_elegido = 0;
+                    break;
+                }
+            }
+        }
+        
+        // Si no hay aristas no-puente, usar cualquier arista disponible
+        if (!hay_no_puente) {
+            for (int i = 0; i < K; i++) {
+                if (matriz_copia[actual][i] > 0) {
+                    siguiente = i;
+                    es_puente_elegido = es_puente(matriz_copia, actual, i, K) ? 1 : 0;
+                    break;
+                }
+            }
+        }
+        
+        if (siguiente == -1) break;
+        
+        // Guardar paso antes de eliminar la arista
+        if (*num_pasos < MAX_PASOS) {
+            PasoFleury *p = &pasos[*num_pasos];
+            for (int i = 0; i < K; i++) {
+                for (int j = 0; j < K; j++) {
+                    p->matriz_restante[i][j] = matriz_copia[i][j];
+                }
+            }
+            p->len_ruta_actual = res_len;
+            for (int i = 0; i < res_len; i++) {
+                p->ruta_actual[i] = resultado[i];
+            }
+            p->vertice_actual = actual;
+            p->arista_elegida_u = actual;
+            p->arista_elegida_v = siguiente;
+            p->es_puente = es_puente_elegido;
+            p->tipo_paso = 1;
+            
+            if (es_puente_elegido) {
+                snprintf(p->descripcion, sizeof(p->descripcion), 
+                        "Se elige la arista %d$\\rightarrow$%d. Esta arista es un \\textit{puente} (su eliminación desconectaría el grafo), pero es la única opción disponible desde el vértice %d.", 
+                        actual, siguiente, actual);
+            } else {
+                snprintf(p->descripcion, sizeof(p->descripcion), 
+                        "Se elige la arista %d$\\rightarrow$%d. Esta arista NO es un puente, por lo que es segura eliminarla sin desconectar el grafo.", 
+                        actual, siguiente);
+            }
+            (*num_pasos)++;
+        }
+        
+        // Remover arista
+        matriz_copia[actual][siguiente]--;
+        if (grafo_actual.tipo == NO_DIRIGIDO) {
+            matriz_copia[siguiente][actual]--;
+        }
+        
+        actual = siguiente;
+        resultado[res_len++] = actual;
+    }
+    
+    // Guardar paso final
+    if (*num_pasos < MAX_PASOS) {
+        PasoFleury *p = &pasos[*num_pasos];
+        for (int i = 0; i < K; i++) {
+            for (int j = 0; j < K; j++) {
+                p->matriz_restante[i][j] = matriz_copia[i][j];
+            }
+        }
+        p->len_ruta_actual = res_len;
+        for (int i = 0; i < res_len; i++) {
+            p->ruta_actual[i] = resultado[i];
+        }
+        p->vertice_actual = resultado[res_len - 1];
+        p->arista_elegida_u = -1;
+        p->arista_elegida_v = -1;
+        p->es_puente = 0;
+        p->tipo_paso = 2;
+        snprintf(p->descripcion, sizeof(p->descripcion), 
+                "Finalización del algoritmo. Todas las aristas han sido eliminadas. Se ha construido una ruta euleriana completa que termina en el vértice %d.", 
+                resultado[res_len - 1]);
+        (*num_pasos)++;
+    }
+    
+    for (int i = 0; i < res_len; i++) {
+        secuencia[i] = resultado[i];
+    }
+    
+    return res_len;
+}
+
+// Función para generar diagrama TikZ de un paso de Fleury
+void generar_tikz_paso_fleury(FILE *f, PasoFleury *paso, int paso_num, int min_x, int min_y, double escala) {
+    int K = grafo_actual.K;
+    
+    fprintf(f, "\\begin{center}\n");
+    fprintf(f, "\\begin{tikzpicture}[scale=%.2f]\n", escala);
+    
+    // Dibujar aristas restantes (grises)
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            if (paso->matriz_restante[i][j] > 0) {
+                double x1 = grafo_actual.posiciones[i].x - min_x;
+                double y1 = grafo_actual.posiciones[i].y - min_y;
+                double x2 = grafo_actual.posiciones[j].x - min_x;
+                double y2 = grafo_actual.posiciones[j].y - min_y;
+                
+                if (grafo_actual.tipo == DIRIGIDO) {
+                    fprintf(f, "\\draw[->, gray!40, dashed, thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+                } else {
+                    if (i < j) {
+                        fprintf(f, "\\draw[gray!40, dashed, thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Dibujar la ruta construida hasta el momento (azul)
+    if (paso->len_ruta_actual > 1) {
+        for (int i = 0; i < paso->len_ruta_actual - 1; i++) {
+            int u = paso->ruta_actual[i];
+            int v = paso->ruta_actual[i + 1];
+            double x1 = grafo_actual.posiciones[u].x - min_x;
+            double y1 = grafo_actual.posiciones[u].y - min_y;
+            double x2 = grafo_actual.posiciones[v].x - min_x;
+            double y2 = grafo_actual.posiciones[v].y - min_y;
+            
+            if (grafo_actual.tipo == DIRIGIDO) {
+                fprintf(f, "\\draw[->, blue, very thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+            } else {
+                fprintf(f, "\\draw[blue, very thick] (%.2f,%.2f) -- (%.2f,%.2f);\n", x1, y1, x2, y2);
+            }
+        }
+    }
+    
+    // Dibujar la arista elegida en este paso (rojo si es puente, verde si no)
+    if (paso->arista_elegida_u >= 0 && paso->arista_elegida_v >= 0) {
+        double x1 = grafo_actual.posiciones[paso->arista_elegida_u].x - min_x;
+        double y1 = grafo_actual.posiciones[paso->arista_elegida_u].y - min_y;
+        double x2 = grafo_actual.posiciones[paso->arista_elegida_v].x - min_x;
+        double y2 = grafo_actual.posiciones[paso->arista_elegida_v].y - min_y;
+        
+        const char *color_arista = paso->es_puente ? "red" : "green!70!black";
+        const char *estilo = paso->es_puente ? "ultra thick" : "ultra thick";
+        
+        if (grafo_actual.tipo == DIRIGIDO) {
+            fprintf(f, "\\draw[->, %s, %s] (%.2f,%.2f) -- (%.2f,%.2f);\n", color_arista, estilo, x1, y1, x2, y2);
+        } else {
+            fprintf(f, "\\draw[%s, %s] (%.2f,%.2f) -- (%.2f,%.2f);\n", color_arista, estilo, x1, y1, x2, y2);
+        }
+    }
+    
+    // Dibujar nodos
+    for (int i = 0; i < K; i++) {
+        double x = grafo_actual.posiciones[i].x - min_x;
+        double y = grafo_actual.posiciones[i].y - min_y;
+        const char *fill_color = (i == paso->vertice_actual) ? "yellow!50" : "white";
+        fprintf(f, "\\node[circle, draw=black, fill=%s, minimum size=0.8cm, font=\\scriptsize] (n%d) at (%.2f,%.2f) {%d};\n",
+                fill_color, i, x, y, i);
+    }
+    
+    fprintf(f, "\\end{tikzpicture}\n");
+    fprintf(f, "\\end{center}\n\n");
 }
 
 void generar_latex(const char *filename) {
@@ -2113,8 +2895,49 @@ void generar_latex(const char *filename) {
             fprintf(f, "\\item Se repite el proceso hasta que todas las aristas hayan sido visitadas\n");
             fprintf(f, "\\end{enumerate}\n\n");
             
-            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
-            fprintf(f, "Para el grafo actual, el algoritmo encontró el siguiente ciclo euleriano:\n\n");
+            fprintf(f, "\\textbf{Ejecución Paso a Paso:}\n\n");
+            fprintf(f, "A continuación se muestra la ejecución detallada del algoritmo. En cada paso se ");
+            fprintf(f, "muestra el estado del grafo, donde:\n\n");
+            fprintf(f, "\\begin{itemize}\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{gray}{gris punteado} son aristas que aún no se han recorrido\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{red}{rojo grueso} forman el ciclo parcial que se está construyendo actualmente\n");
+            fprintf(f, "\\item Las aristas en otros colores (azul, verde, naranja, etc.) son ciclos parciales que ya se completaron\n");
+            fprintf(f, "\\end{itemize}\n\n");
+            
+            // Ejecutar algoritmo paso a paso
+            PasoHierholzer pasos[MAX_PASOS];
+            int num_pasos = 0;
+            int secuencia_paso_a_paso[MAX_NODOS * MAX_NODOS];
+            int len_paso_a_paso = encontrar_ciclo_euleriano_hierholzer_paso_a_paso(secuencia_paso_a_paso, pasos, &num_pasos);
+            
+            // Calcular escala para los diagramas (usar los mismos valores que el grafo original)
+            int min_x = grafo_actual.posiciones[0].x;
+            int max_x = grafo_actual.posiciones[0].x;
+            int min_y = grafo_actual.posiciones[0].y;
+            int max_y = grafo_actual.posiciones[0].y;
+            for (int i = 1; i < K; i++) {
+                if (grafo_actual.posiciones[i].x < min_x) min_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].x > max_x) max_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].y < min_y) min_y = grafo_actual.posiciones[i].y;
+                if (grafo_actual.posiciones[i].y > max_y) max_y = grafo_actual.posiciones[i].y;
+            }
+            double ancho = (max_x - min_x > 0) ? (max_x - min_x) : 1.0;
+            double alto = (max_y - min_y > 0) ? (max_y - min_y) : 1.0;
+            double escala = 12.0 / (ancho > alto ? ancho : alto);
+            
+            // Generar diagramas para cada paso
+            for (int p = 0; p < num_pasos && p < 20; p++) {  // Limitar a 20 pasos para no hacer el PDF muy largo
+                fprintf(f, "\\subsubsection{Paso %d}\n\n", p + 1);
+                fprintf(f, "%s\n\n", pasos[p].descripcion);
+                generar_tikz_paso_hierholzer(f, &pasos[p], p + 1, min_x, min_y, escala);
+            }
+            
+            if (num_pasos > 20) {
+                fprintf(f, "\\textit{Nota: Se muestran los primeros 20 pasos de un total de %d pasos.}\n\n", num_pasos);
+            }
+            
+            fprintf(f, "\\textbf{Ciclo Euleriano Final:}\n\n");
+            fprintf(f, "El algoritmo encontró el siguiente ciclo euleriano completo:\n\n");
             fprintf(f, "\\begin{center}\n");
             fprintf(f, "\\Large\n");
             for (int i = 0; i < len_hierholzer; i++) {
@@ -2228,8 +3051,51 @@ void generar_latex(const char *filename) {
             fprintf(f, "\\item Se repite el proceso hasta que todas las aristas hayan sido eliminadas\n");
             fprintf(f, "\\end{enumerate}\n\n");
             
-            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
-            fprintf(f, "Para el grafo actual, el algoritmo de Fleury encontró el siguiente ciclo euleriano:\n\n");
+            fprintf(f, "\\textbf{Ejecución Paso a Paso:}\n\n");
+            fprintf(f, "A continuación se muestra la ejecución detallada del algoritmo. En cada paso se ");
+            fprintf(f, "muestra el estado del grafo, donde:\n\n");
+            fprintf(f, "\\begin{itemize}\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{gray}{gris punteado} son aristas que aún no se han eliminado\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{blue}{azul grueso} forman la ruta construida hasta el momento\n");
+            fprintf(f, "\\item La arista en \\textcolor{green!70!black}{verde grueso} es la arista elegida en este paso (no es puente)\n");
+            fprintf(f, "\\item La arista en \\textcolor{red}{rojo grueso} es la arista elegida en este paso (es un puente, pero es la única opción)\n");
+            fprintf(f, "\\item El vértice en \\textcolor{yellow!50}{amarillo} es el vértice actual\n");
+            fprintf(f, "\\end{itemize}\n\n");
+            
+            // Ejecutar algoritmo paso a paso
+            PasoFleury pasos_fleury[MAX_PASOS];
+            int num_pasos_fleury = 0;
+            int secuencia_fleury_paso_a_paso[MAX_NODOS * MAX_NODOS];
+            int len_fleury_paso_a_paso = encontrar_ciclo_euleriano_fleury_paso_a_paso(secuencia_fleury_paso_a_paso, pasos_fleury, &num_pasos_fleury);
+            
+            // Calcular escala para los diagramas
+            int min_x = grafo_actual.posiciones[0].x;
+            int max_x = grafo_actual.posiciones[0].x;
+            int min_y = grafo_actual.posiciones[0].y;
+            int max_y = grafo_actual.posiciones[0].y;
+            for (int i = 1; i < K; i++) {
+                if (grafo_actual.posiciones[i].x < min_x) min_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].x > max_x) max_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].y < min_y) min_y = grafo_actual.posiciones[i].y;
+                if (grafo_actual.posiciones[i].y > max_y) max_y = grafo_actual.posiciones[i].y;
+            }
+            double ancho = (max_x - min_x > 0) ? (max_x - min_x) : 1.0;
+            double alto = (max_y - min_y > 0) ? (max_y - min_y) : 1.0;
+            double escala = 12.0 / (ancho > alto ? ancho : alto);
+            
+            // Generar diagramas para cada paso
+            for (int p = 0; p < num_pasos_fleury && p < 20; p++) {  // Limitar a 20 pasos
+                fprintf(f, "\\subsubsection{Paso %d}\n\n", p + 1);
+                fprintf(f, "%s\n\n", pasos_fleury[p].descripcion);
+                generar_tikz_paso_fleury(f, &pasos_fleury[p], p + 1, min_x, min_y, escala);
+            }
+            
+            if (num_pasos_fleury > 20) {
+                fprintf(f, "\\textit{Nota: Se muestran los primeros 20 pasos de un total de %d pasos.}\n\n", num_pasos_fleury);
+            }
+            
+            fprintf(f, "\\textbf{Ciclo Euleriano Final:}\n\n");
+            fprintf(f, "El algoritmo encontró el siguiente ciclo euleriano completo:\n\n");
             fprintf(f, "\\begin{center}\n");
             fprintf(f, "\\Large\n");
             for (int i = 0; i < len_fleury_ciclo; i++) {
@@ -2303,9 +3169,51 @@ void generar_latex(const char *filename) {
             fprintf(f, "en un vértice con más entradas que salidas (en dirigidos)\n");
             fprintf(f, "\\end{enumerate}\n\n");
             
-            fprintf(f, "\\textbf{Ejecución en este Grafo:}\n\n");
-            fprintf(f, "Para el grafo semieuleriano actual, el algoritmo de Fleury encontró la siguiente ");
-            fprintf(f, "ruta euleriana:\n\n");
+            fprintf(f, "\\textbf{Ejecución Paso a Paso:}\n\n");
+            fprintf(f, "A continuación se muestra la ejecución detallada del algoritmo. En cada paso se ");
+            fprintf(f, "muestra el estado del grafo, donde:\n\n");
+            fprintf(f, "\\begin{itemize}\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{gray}{gris punteado} son aristas que aún no se han eliminado\n");
+            fprintf(f, "\\item Las aristas en \\textcolor{blue}{azul grueso} forman la ruta construida hasta el momento\n");
+            fprintf(f, "\\item La arista en \\textcolor{green!70!black}{verde grueso} es la arista elegida en este paso (no es puente)\n");
+            fprintf(f, "\\item La arista en \\textcolor{red}{rojo grueso} es la arista elegida en este paso (es un puente, pero es la única opción)\n");
+            fprintf(f, "\\item El vértice en \\textcolor{yellow!50}{amarillo} es el vértice actual\n");
+            fprintf(f, "\\end{itemize}\n\n");
+            
+            // Ejecutar algoritmo paso a paso
+            PasoFleury pasos_fleury_ruta[MAX_PASOS];
+            int num_pasos_fleury_ruta = 0;
+            int secuencia_fleury_ruta_paso_a_paso[MAX_NODOS * MAX_NODOS];
+            int len_fleury_ruta_paso_a_paso = encontrar_ruta_euleriana_fleury_paso_a_paso(secuencia_fleury_ruta_paso_a_paso, pasos_fleury_ruta, &num_pasos_fleury_ruta);
+            
+            // Calcular escala para los diagramas
+            int min_x = grafo_actual.posiciones[0].x;
+            int max_x = grafo_actual.posiciones[0].x;
+            int min_y = grafo_actual.posiciones[0].y;
+            int max_y = grafo_actual.posiciones[0].y;
+            for (int i = 1; i < K; i++) {
+                if (grafo_actual.posiciones[i].x < min_x) min_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].x > max_x) max_x = grafo_actual.posiciones[i].x;
+                if (grafo_actual.posiciones[i].y < min_y) min_y = grafo_actual.posiciones[i].y;
+                if (grafo_actual.posiciones[i].y > max_y) max_y = grafo_actual.posiciones[i].y;
+            }
+            double ancho = (max_x - min_x > 0) ? (max_x - min_x) : 1.0;
+            double alto = (max_y - min_y > 0) ? (max_y - min_y) : 1.0;
+            double escala = 12.0 / (ancho > alto ? ancho : alto);
+            
+            // Generar diagramas para cada paso
+            for (int p = 0; p < num_pasos_fleury_ruta && p < 20; p++) {  // Limitar a 20 pasos
+                fprintf(f, "\\subsubsection{Paso %d}\n\n", p + 1);
+                fprintf(f, "%s\n\n", pasos_fleury_ruta[p].descripcion);
+                generar_tikz_paso_fleury(f, &pasos_fleury_ruta[p], p + 1, min_x, min_y, escala);
+            }
+            
+            if (num_pasos_fleury_ruta > 20) {
+                fprintf(f, "\\textit{Nota: Se muestran los primeros 20 pasos de un total de %d pasos.}\n\n", num_pasos_fleury_ruta);
+            }
+            
+            fprintf(f, "\\textbf{Ruta Euleriana Final:}\n\n");
+            fprintf(f, "El algoritmo encontró la siguiente ruta euleriana completa:\n\n");
             fprintf(f, "\\begin{center}\n");
             fprintf(f, "\\Large\n");
             for (int i = 0; i < len_fleury_ruta; i++) {
