@@ -1181,25 +1181,20 @@ void generar_latex(const char *filename) {
     fprintf(f, "\\usepackage{graphicx}\n");
     fprintf(f, "\\usepackage{amsmath}\n");
     fprintf(f, "\\usepackage{xcolor}\n");
-    // Configurar búsqueda de imágenes en el directorio actual (compatible con Linux)
+    // Configurar búsqueda de imágenes en el directorio actual (compatible con Linux y Windows)
     fprintf(f, "\\graphicspath{{./}{./images/}{./imagenes/}}\n");
     fprintf(f, "\\usepackage{pdftexcmds}\n");
-    // Definir comando para incluir imágenes opcionales (compatible con Linux)
+    // Definir comando para incluir imágenes opcionales (compatible con Linux y Windows)
     // Este comando verifica si la imagen existe antes de intentar incluirla
     fprintf(f, "\\makeatletter\n");
     fprintf(f, "\\newcommand{\\includegraphicsoptional}[2][]{%%\n");
-    fprintf(f, "  \\begingroup\n");
-    fprintf(f, "  \\pdf@unifilename{#2}%%\n");
-    fprintf(f, "  \\edef\\@imgdate{\\pdf@filemoddate{#2}}%%\n");
-    fprintf(f, "  \\def\\@imgtest{}%%\n");
-    fprintf(f, "  \\ifx\\@imgdate\\@imgtest\n");
-    fprintf(f, "    %% Imagen no encontrada - mostrar placeholder\n");
-    fprintf(f, "    \\fbox{\\parbox{0.3\\textwidth}{\\centering\\vspace{1.5cm}\\textcolor{gray}{\\textit{[Imagen no disponible]}}\\\\ \\small{(#2)}\\vspace{1.5cm}}}%%\n");
-    fprintf(f, "  \\else\n");
+    fprintf(f, "  \\IfFileExists{#2}{%%\n");
     fprintf(f, "    %% Imagen encontrada - incluir normalmente\n");
     fprintf(f, "    \\includegraphics[#1]{#2}%%\n");
-    fprintf(f, "  \\fi\n");
-    fprintf(f, "  \\endgroup\n");
+    fprintf(f, "  }{%%\n");
+    fprintf(f, "    %% Imagen no encontrada - mostrar placeholder\n");
+    fprintf(f, "    \\fbox{\\parbox{0.3\\textwidth}{\\centering\\vspace{1.5cm}\\textcolor{gray}{\\textit{[Imagen no disponible]}}\\\\ \\small{(#2)}\\vspace{1.5cm}}}%%\n");
+    fprintf(f, "  }%%\n");
     fprintf(f, "}\n");
     fprintf(f, "\\makeatother\n");
     fprintf(f, "\\geometry{a4paper, margin=2.5cm}\n");
